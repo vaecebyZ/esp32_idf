@@ -6,7 +6,7 @@
 #include "driver/sdmmc_host.h"
 
 #define MOUNT_POINT "/sdcard"
-#define FILEPATH_MAX 1024
+#define FILEPATH_MAX 2048
 #define MAX_FILES 100       // 最大文件数量
 #define MAX_PATH_LENGTH 300 // 单个路径的最大长度
 

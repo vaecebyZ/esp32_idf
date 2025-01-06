@@ -22,7 +22,7 @@ void app_main()
 
     // 初始化 Wi-Fi
     ESP_LOGW(TAG, "Initializing Wi-Fi...");
-    wifi_init_sta();
+    wifi_init();
     while (!wifi_is_connected())
     {
         ESP_LOGW(TAG, "Waiting for Wi-Fi connection...");

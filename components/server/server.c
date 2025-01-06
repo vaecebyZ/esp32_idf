@@ -5,7 +5,7 @@
 
 static const char *TAG = "HTTPD_SERVER";
 
-#define FILEPATH_MAX 1024
+#define FILEPATH_MAX 2048
 #define MAX_FILES 100
 #define MOUNT_POINT "/sdcard"
 
@@ -38,7 +38,8 @@ static const char *get_mime_type(const char *filepath)
     return "image/x-icon";
   if (strstr(filepath, ".json"))
     return "application/json";
-
+  if (strstr(filepath, ".mp4"))
+    return "video/mpeg4";
   // 处理字体格式
   if (strstr(filepath, ".ttf"))
     return "font/ttf";
