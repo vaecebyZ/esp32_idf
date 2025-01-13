@@ -30,42 +30,9 @@ bool at_http_get()
   // 基本检查
   if (!at_check_base())
     return false;
-  // 设置 GPRS PDP 上下文 确保 PDP 激活
-  if (!isPDPActive)
-  {
-    if (!at_send_command("AT+SAPBR=3,1,\"CONTYPE\",\"GPRS\"", "OK", 1000, NULL))
-    {
-      ESP_LOGE("HTTP", "Failed to set GPRS connection type");
-      return false;
-    }
-    if (!at_send_command("AT+SAPBR=3,1,\"APN\",\"\"", "OK", 1000, NULL))
-    {
-      ESP_LOGE("HTTP", "Failed to set APN");
-      return false;
-    }
-    vTaskDelay(pdMS_TO_TICKS(3000)); // 延迟以确保 PDP 激活
-    // 激活 PDP 上下文
-    if (!at_send_command("AT+SAPBR=1,1", "OK", 3000, NULL))
-    {
-      ESP_LOGE("HTTP", "Failed to activate PDP context");
-      return false;
-    }
-    // 查询 PDP 状态，确保 IP 地址有效
-    vTaskDelay(pdMS_TO_TICKS(1000));
-    if (!at_send_command("AT+SAPBR=2,1", "+SAPBR:", 3000, response))
-    {
-      ESP_LOGE("HTTP", "Failed to query PDP context status");
-      return false;
-    }
-    ESP_LOGI("HTTP", "PDP context status: %s", response);
-    if (strstr(response, "\"0.0.0.0\"") != NULL)
-    {
-      ESP_LOGE("HTTP", "Invalid IP address, GPRS connection failed");
-      return false;
-    }
-    // 设置 PDP 激活标志
-    isPDPActive = true;
-  }
+  // PDP 检查
+  if (!at_check_pdp())
+    return false;
   // 初始化 HTTP
   if (!at_send_command("AT+HTTPINIT", "OK", 1000, NULL))
   {
@@ -144,6 +111,7 @@ bool at_http_get()
       return false;
     }
     ESP_LOGI("HTTP", "HTTP response: %s", response);
+    // 处理http get 返回
   }
   else
   {
