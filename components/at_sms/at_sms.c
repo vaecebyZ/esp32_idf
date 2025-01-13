@@ -26,13 +26,13 @@ bool at_sms_send()
   if (!at_check_base())
     return false;
   // Execute AT commands step by step
-  if (!at_send_command("AT+CSMS=1", "OK", 1000, NULL))
+  if (!at_send_command("AT+CSMS=1", "OK", 1000, NULL,false))
     return false;
-  if (!at_send_command("AT+CMGF=1", "OK", 1000, NULL))
+  if (!at_send_command("AT+CMGF=1", "OK", 1000, NULL,false))
     return false;
-  if (!at_send_command("AT+CMGS=\"1390000000\"", ">", 3000, NULL))
+  if (!at_send_command("AT+CMGS=\"1390000000\"", ">", 3000, NULL,false))
     return false;
-  if (!at_send_command("HELLOW", "OK", 15000, NULL))
+  if (!at_send_command("HELLOW", "OK", 15000, NULL,false))
   {
     ESP_LOGE(TAG, "Failed to send SMS content");
     return false;

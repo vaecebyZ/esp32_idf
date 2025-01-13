@@ -39,7 +39,7 @@ bool at_check_ping()
   // 每个2秒发送一个AT直到返回OK (最多发送5次)
   for (int i = 0; i < 5; i++)
   {
-    if (at_send_command("AT", "OK", 2000, NULL))
+    if (at_send_command("AT", "OK", 2000, NULL, false))
     {
       ESP_LOGI(TAG, "AT check passed. Module is functioning correctly.");
       return true;
@@ -58,35 +58,35 @@ bool at_check_base()
   ESP_LOGI(TAG, "Performing AT check...");
 
   // Check AT command communication
-  if (!at_send_command("AT", "OK", 5000, NULL))
+  if (!at_send_command("AT", "OK", 5000, NULL, false))
   {
     ESP_LOGE(TAG, "Failed to communicate with module using AT command");
     return false;
   }
 
   // Retrieve ICCID
-  if (!at_send_command("AT+ICCID", "+ICCID", 5000, NULL))
+  if (!at_send_command("AT+ICCID", "+ICCID", 5000, NULL, false))
   {
     ESP_LOGE(TAG, "Failed to retrieve ICCID");
     return false;
   }
 
   // Disable echo
-  if (!at_send_command("ATE0", "OK", 5000, NULL))
+  if (!at_send_command("ATE0", "OK", 5000, NULL, false))
   {
     ESP_LOGE(TAG, "Failed to disable echo");
     return false;
   }
 
   // Check signal quality
-  if (!at_send_command("AT+CSQ", "OK", 5000, NULL))
+  if (!at_send_command("AT+CSQ", "OK", 5000, NULL, false))
   {
     ESP_LOGE(TAG, "Failed to retrieve signal quality");
     return false;
   }
 
   // Check network attachment status
-  if (!at_send_command("AT+CGATT?", "+CGATT: 1", 5000, NULL))
+  if (!at_send_command("AT+CGATT?", "+CGATT: 1", 5000, NULL, false))
   {
     ESP_LOGE(TAG, "Module is not attached to the network");
     return false;
@@ -103,18 +103,18 @@ bool at_check_pdp()
   // 设置 GPRS PDP 上下文 确保 PDP 激活
   if (!isPDPActive)
   {
-    if (!at_send_command("AT+SAPBR=3,1,\"CONTYPE\",\"GPRS\"", "OK", 1000, NULL))
+    if (!at_send_command("AT+SAPBR=3,1,\"CONTYPE\",\"GPRS\"", "OK", 1000, NULL, false))
     {
       ESP_LOGE(TAG, "Failed to set GPRS connection type");
       return false;
     }
-    if (!at_send_command("AT+SAPBR=3,1,\"APN\",\"\"", "OK", 1000, NULL))
+    if (!at_send_command("AT+SAPBR=3,1,\"APN\",\"\"", "OK", 1000, NULL, false))
     {
       ESP_LOGE(TAG, "Failed to set APN");
       return false;
     }
     // 查询 PDP 状态，确保 IP 地址有效
-    if (!at_send_command("AT+SAPBR=2,1", "+SAPBR:", 3000, response))
+    if (!at_send_command("AT+SAPBR=2,1", "+SAPBR:", 3000, response, false))
     {
       ESP_LOGE(TAG, "Failed to query PDP context status");
       return false;
@@ -124,14 +124,14 @@ bool at_check_pdp()
     {
       ESP_LOGE(TAG, "Invalid IP address, PDP is not Active ,Activating PDP context...");
       // 激活 PDP 上下文
-      if (!at_send_command("AT+SAPBR=1,1", "OK", 3000, NULL))
+      if (!at_send_command("AT+SAPBR=1,1", "OK", 3000, NULL, false))
       {
         ESP_LOGE(TAG, "Failed to activate PDP context");
         return false;
       }
 
       // 再次查询 PDP 状态
-      if (!at_send_command("AT+SAPBR=2,1", "+SAPBR:", 3000, response))
+      if (!at_send_command("AT+SAPBR=2,1", "+SAPBR:", 3000, response,false))
       {
         ESP_LOGE(TAG, "Failed to query PDP context status");
         return false;

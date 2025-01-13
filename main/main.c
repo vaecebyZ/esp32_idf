@@ -10,11 +10,6 @@
 
 static const char *TAG = "MAIN";
 
-void get_http()
-{
-  at_http_get();
-}
-
 void app_main()
 {
   // Initialize UART
@@ -28,10 +23,7 @@ void app_main()
   // Perform AT check
   if (at_check_ping())
   {
-    if (at_http_get())
-    {
-      at_http_get();
-    }
+    at_http_post("https://dev.usemock.com/6782c14e1f946a67671573e2/pong");
   }
   while (1)
   {

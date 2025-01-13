@@ -3,12 +3,15 @@
 #include "driver/uart.h"
 #include "esp_log.h"
 #include <stddef.h>
+#include "esp_err.h"
+#include "driver/gpio.h"
 
 static const char *TAG = "UART";
 
-#define UART_NUM UART_NUM_0
+#define UART_NUM UART_NUM_1
+#define TXD_PIN GPIO_NUM_17 // UART1 TX 引脚
+#define RXD_PIN GPIO_NUM_18 // UART1 RX 引脚
 #define UART_BUF_SIZE 256
-#define portTICK_RATE_MS 10
 
 static bool inited = false;
 
@@ -21,22 +24,29 @@ void at_uart_init()
         .parity = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_APB,
     };
-    uart_param_config(UART_NUM, &uart_config);
-    uart_driver_install(UART_NUM, UART_BUF_SIZE * 2, 0, 0, NULL, 0);
+    // Configure UART parameters
+    ESP_ERROR_CHECK(uart_driver_install(UART_NUM, UART_BUF_SIZE, 0, 0, NULL, 0));
+    ESP_ERROR_CHECK(uart_param_config(UART_NUM, &uart_config));
+    // Set UART pins(TX, RX, RTS, CTS)
+    ESP_ERROR_CHECK(uart_set_pin(UART_NUM, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
     ESP_LOGI(TAG, "inited");
     inited = true;
 }
 
 // Send an AT command and wait for a response
-bool at_send_command(const char *command, const char *expected_response, int timeout_ms, char *out_response)
+bool at_send_command(const char *command, const char *expected_response, int timeout_ms, char *out_response, bool noR)
 {
     char response[UART_BUF_SIZE] = {0};
     uart_flush(UART_NUM);
     ESP_LOGI(TAG, "Sending [%s] expected response: %s", command, expected_response ? expected_response : "NULL");
 
     uart_write_bytes(UART_NUM, command, strlen(command));
-    uart_write_bytes(UART_NUM, "\r", 1);
+    if (!noR)
+    {
+        uart_write_bytes(UART_NUM, "\r", 1);
+    }
 
     // Wait for response
     int length = 0;
