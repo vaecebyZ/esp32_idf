@@ -6,6 +6,7 @@
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #define UART_BUF_SIZE 256
+static bool isPDPActive = false;
 bool close()
 {
   // 终止 HTTP 会话
@@ -15,14 +16,6 @@ bool close()
     // 终止任务或返回错误
     return false;
   }
-  // 启动新的 HTTP 会话
-  if (!at_send_command("AT+HTTPINIT", "OK", 10000, NULL))
-  {
-    ESP_LOGE("HTTP", "Failed to initialize HTTP");
-    // 终止任务或返回错误
-    return false;
-  }
-  ESP_LOGI("HTTP", "HTTP session terminated");
 
   vTaskDelay(pdMS_TO_TICKS(3000));
 
@@ -37,36 +30,41 @@ bool at_http_get()
   // 基本检查
   if (!at_check_base())
     return false;
-  // 设置 GPRS PDP 上下文
-  if (!at_send_command("AT+SAPBR=3,1,\"CONTYPE\",\"GPRS\"", "OK", 1000, NULL))
+  // 设置 GPRS PDP 上下文 确保 PDP 激活
+  if (!isPDPActive)
   {
-    ESP_LOGE("HTTP", "Failed to set GPRS connection type");
-    return false;
-  }
-  if (!at_send_command("AT+SAPBR=3,1,\"APN\",\"\"", "OK", 1000, NULL))
-  {
-    ESP_LOGE("HTTP", "Failed to set APN");
-    return false;
-  }
-  vTaskDelay(pdMS_TO_TICKS(3000)); // 延迟以确保 PDP 激活
-  // 激活 PDP 上下文
-  if (!at_send_command("AT+SAPBR=1,1", "OK", 10000, NULL))
-  {
-    ESP_LOGE("HTTP", "Failed to activate PDP context");
-    return false;
-  }
-  // 查询 PDP 状态，确保 IP 地址有效
-  vTaskDelay(pdMS_TO_TICKS(3000));
-  if (!at_send_command("AT+SAPBR=2,1", "+SAPBR:", 10000, response))
-  {
-    ESP_LOGE("HTTP", "Failed to query PDP context status");
-    return false;
-  }
-  ESP_LOGI("HTTP", "PDP context status: %s", response);
-  if (strstr(response, "\"0.0.0.0\"") != NULL)
-  {
-    ESP_LOGE("HTTP", "Invalid IP address, GPRS connection failed");
-    return false;
+    if (!at_send_command("AT+SAPBR=3,1,\"CONTYPE\",\"GPRS\"", "OK", 1000, NULL))
+    {
+      ESP_LOGE("HTTP", "Failed to set GPRS connection type");
+      return false;
+    }
+    if (!at_send_command("AT+SAPBR=3,1,\"APN\",\"\"", "OK", 1000, NULL))
+    {
+      ESP_LOGE("HTTP", "Failed to set APN");
+      return false;
+    }
+    vTaskDelay(pdMS_TO_TICKS(3000)); // 延迟以确保 PDP 激活
+    // 激活 PDP 上下文
+    if (!at_send_command("AT+SAPBR=1,1", "OK", 3000, NULL))
+    {
+      ESP_LOGE("HTTP", "Failed to activate PDP context");
+      return false;
+    }
+    // 查询 PDP 状态，确保 IP 地址有效
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    if (!at_send_command("AT+SAPBR=2,1", "+SAPBR:", 3000, response))
+    {
+      ESP_LOGE("HTTP", "Failed to query PDP context status");
+      return false;
+    }
+    ESP_LOGI("HTTP", "PDP context status: %s", response);
+    if (strstr(response, "\"0.0.0.0\"") != NULL)
+    {
+      ESP_LOGE("HTTP", "Invalid IP address, GPRS connection failed");
+      return false;
+    }
+    // 设置 PDP 激活标志
+    isPDPActive = true;
   }
   // 初始化 HTTP
   if (!at_send_command("AT+HTTPINIT", "OK", 1000, NULL))
@@ -83,11 +81,11 @@ bool at_http_get()
   }
   // 设置目标URL
   char url[256];
-  snprintf(url, sizeof(url), "AT+HTTPPARA=\"URL\",\"https://dev.usemock.com/xxxxx/ping\"");
+  snprintf(url, sizeof(url), "AT+HTTPPARA=\"URL\",\"https://dev.usemock.com/6782c14e1f946a67671573e2/ping\"");
   if (!at_send_command(url, "OK", 15000, NULL))
   {
     ESP_LOGE("HTTP", "Failed to set HTTP URL");
-    // close();
+    close();
     return false;
   }
   // 执行 HTTP GET
@@ -95,7 +93,6 @@ bool at_http_get()
   {
     ESP_LOGE("HTTP", "HTTP GET action failed");
     close();
-
     return false;
   }
   if (strlen(response) == 0)
