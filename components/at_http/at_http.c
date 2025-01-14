@@ -8,7 +8,6 @@
 #include "cJSON.h"
 
 #define UART_BUF_SIZE 256
-bool isPDPActive = false;
 bool close()
 {
   // 终止 HTTP 会话
@@ -130,8 +129,6 @@ bool at_http_get(const char *path)
   return true;
 }
 
-// https://dev.usemock.com/6782c14e1f946a67671573e2/pong
-
 bool at_http_post(const char *path)
 {
   if (path == NULL || strlen(path) == 0)
@@ -202,7 +199,7 @@ bool at_http_post(const char *path)
     return false;
   }
 
-  // 执行 HTTP POST 
+  // 执行 HTTP POST
   if (!at_send_command("AT+HTTPACTION=1", "+HTTPACTION:", 3000, response, false))
   {
     ESP_LOGE("HTTP", "HTTP POST action failed");
