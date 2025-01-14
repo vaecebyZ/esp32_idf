@@ -19,7 +19,7 @@ static bool inited = false;
 void at_uart_init()
 {
     uart_config_t uart_config = {
-        .baud_rate = 9600,
+        .baud_rate = 115200,
         .data_bits = UART_DATA_8_BITS,
         .parity = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
@@ -60,7 +60,7 @@ bool at_send_command(const char *command, const char *expected_response, int tim
             response[length] = '\0'; // Null-terminate response
             if (strstr(response, expected_response))
             {
-                ESP_LOGI(TAG, "Received expected response for [%s]: %s", command, response);
+                ESP_LOGI(TAG, "Received expected response : %s", response);
 
                 // If out_response is not NULL, copy the response to the output buffer
                 if (out_response != NULL)

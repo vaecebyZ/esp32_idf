@@ -21,6 +21,7 @@ void init_gpio()
   };
   gpio_config(&reset_cfg);
 }
+
 // Reset the module set by the RESET_PIN High for 1 second
 bool at_check_reset()
 {
@@ -37,9 +38,9 @@ bool at_check_reset()
 bool at_check_ping()
 {
   // 每个2秒发送一个AT直到返回OK (最多发送5次)
-  for (int i = 0; i < 5; i++)
+  for (int i = 0; i < 10; i++)
   {
-    if (at_send_command("AT", "OK", 2000, NULL, false))
+    if (at_send_command("AT", "OK", 1000, NULL, false))
     {
       ESP_LOGI(TAG, "AT check passed. Module is functioning correctly.");
       return true;
@@ -96,6 +97,43 @@ bool at_check_base()
   return true;
 }
 
+char *at_get_iccid()
+{
+  static char iccid[21]; // ICCID 长度固定为 20 字符，加 1 用于空字符
+  char response[UART_BUF_SIZE];
+
+  // 发送 AT 命令并获取响应
+  if (!at_send_command("AT+ICCID", "+ICCID", 5000, response, false))
+  {
+    ESP_LOGE(TAG, "Failed to retrieve ICCID");
+    return NULL;
+  }
+
+  // 日志记录完整响应
+  ESP_LOGI(TAG, "Response: %s", response);
+
+  // 提取 "+ICCID: " 后的 ICCID 值
+  char *start = strstr(response, "+ICCID: ");
+  if (start)
+  {
+    start += strlen("+ICCID: ");     // 跳过 "+ICCID: " 部分
+    char *end = strchr(start, '\r'); // 查找行尾标志
+    if (end)
+    {
+      size_t len = end - start;
+      if (len < sizeof(iccid)) // 确保不会溢出
+      {
+        strncpy(iccid, start, len);
+        iccid[len] = '\0'; // 确保以空字符结尾
+        return iccid;
+      }
+    }
+  }
+
+  ESP_LOGE(TAG, "Invalid ICCID response format");
+  return NULL;
+}
+
 static bool isPDPActive = false;
 bool at_check_pdp()
 {
@@ -131,7 +169,7 @@ bool at_check_pdp()
       }
 
       // 再次查询 PDP 状态
-      if (!at_send_command("AT+SAPBR=2,1", "+SAPBR:", 3000, response,false))
+      if (!at_send_command("AT+SAPBR=2,1", "+SAPBR:", 3000, response, false))
       {
         ESP_LOGE(TAG, "Failed to query PDP context status");
         return false;
