@@ -202,8 +202,8 @@ bool at_http_post(const char *path)
     return false;
   }
 
-  // 执行 HTTP POST
-  if (!at_send_command("AT+HTTPACTION=1","OK", 3000, response, false))
+  // 执行 HTTP POST 
+  if (!at_send_command("AT+HTTPACTION=1", "+HTTPACTION:", 3000, response, false))
   {
     ESP_LOGE("HTTP", "HTTP POST action failed");
     close();

@@ -23,6 +23,8 @@ void app_main()
   // Perform AT check
   if (at_check_ping())
   {
+    // at_http_get("https://dev.usemock.com/6782c14e1f946a67671573e2/ping");
+
     at_http_post("https://dev.usemock.com/6782c14e1f946a67671573e2/pong");
   }
   while (1)

@@ -30,7 +30,7 @@ bool at_check_reset()
   vTaskDelay(pdMS_TO_TICKS(1000));
   gpio_set_level(RESET_PIN, 0);
   ESP_LOGI(TAG, "Module reset complete..");
-  vTaskDelay(pdMS_TO_TICKS(5000));
+  vTaskDelay(pdMS_TO_TICKS(6000));
   return true;
 }
 
