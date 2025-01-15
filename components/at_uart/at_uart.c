@@ -5,13 +5,14 @@
 #include <stddef.h>
 #include "esp_err.h"
 #include "driver/gpio.h"
+#include "at_config.h"
 
 static const char *TAG = "UART";
 
 #define UART_NUM UART_NUM_1
 #define TXD_PIN GPIO_NUM_17 // UART1 TX 引脚
 #define RXD_PIN GPIO_NUM_18 // UART1 RX 引脚
-#define UART_BUF_SIZE 256
+
 
 static bool inited = false;
 

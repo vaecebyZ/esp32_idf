@@ -8,14 +8,48 @@
 #include "at_sms.h"
 #include "at_http.h"
 #include "at_mq.h"
+#include "at_config.h"
+#include "cJSON.h"
+#include "at_utils.h"
 
 static const char *TAG = "MAIN";
 
 void getMQ()
 {
-  at_mq_connect("h");
-  at_mq_subscribe("h");
-  at_mq_publish("h", "h");
+  char *iccid = at_get_iccid();
+  if (iccid == NULL)
+  {
+    ESP_LOGI(TAG, "ICCID is NULL");
+    return;
+  }
+  mqConfig_t mqconfig = {
+      .server = "",
+      .port = "1883",
+      .clientId = iccid,
+      .username = "",
+      .password = "",
+  };
+
+  at_mq_connect(mqconfig);
+  at_mq_subscribe("/platform/kbmqvsoj/regist/#");
+
+  cJSON *payload = cJSON_CreateObject();
+  cJSON_AddStringToObject(payload, "deviceId", iccid);
+  cJSON_AddStringToObject(payload, "deviceName", "ESP32_AT");
+  cJSON_AddStringToObject(payload, "deviceCate", getDeviceCateString(Elevator));
+  cJSON_AddStringToObject(payload, "mqttUserName", mqconfig.username);
+  cJSON_AddStringToObject(payload, "projectInfoCode", "PJ202406050002");
+
+  mqMessage_t message = {
+      .topic = "/platform/kbmqvsoj/regist/ESP32_AT",
+      .event = RegistDevice,
+      .data = payload,
+      .time = get_current_timestamp_ms(),
+      .ttl = 5000,
+      .id = iccid,
+  };
+
+  at_mq_publish(message);
   at_mq_free();
   while (1)
   {

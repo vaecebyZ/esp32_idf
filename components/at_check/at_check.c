@@ -5,8 +5,9 @@
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
 #include <string.h>
+#include "at_config.h"
 #define RESET_PIN GPIO_NUM_1
-#define UART_BUF_SIZE 256
+
 
 static const char *TAG = "AT_CHECK";
 // 初始化GPIO
@@ -160,7 +161,7 @@ bool at_check_pdp()
     ESP_LOGI(TAG, "IP context status: %s", response);
     if (strstr(response, "\"0.0.0.0\"") != NULL)
     {
-      ESP_LOGE(TAG, "Invalid IP address, PDP is not Active ,Activating PDP context...");
+      ESP_LOGW(TAG, "Invalid IP address, PDP is not Active ,Activating PDP context...");
       // 激活 PDP 上下文
       if (!at_send_command("AT+SAPBR=1,1", "OK", 3000, NULL, false))
       {
