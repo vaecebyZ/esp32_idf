@@ -6,7 +6,9 @@
 #include "esp_err.h"
 #include "driver/gpio.h"
 #include "at_config.h"
-
+#include <freertos/semphr.h>
+// 定义互斥锁句柄
+SemaphoreHandle_t xMutex;
 static const char *TAG = "UART";
 
 #define UART_NUM UART_NUM_1
@@ -32,12 +34,24 @@ void at_uart_init()
     // Set UART pins(TX, RX, RTS, CTS)
     ESP_ERROR_CHECK(uart_set_pin(UART_NUM, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
     ESP_LOGI(TAG, "inited");
+    // 创建互斥锁
+    xMutex = xSemaphoreCreateMutex();
+    if (xMutex == NULL)
+    {
+        printf("Failed to create mutex\n");
+        return;
+    }
     inited = true;
 }
 
 // Send an AT command and wait for a response
 bool at_send_command(const char *command, const char *expected_response, int timeout_ms, char *out_response, bool noR)
 {
+    while (xSemaphoreTake(xMutex, portMAX_DELAY) == pdFALSE)
+    {
+        ESP_LOGW(TAG, "Waiting for mutex");
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
     char response[UART_BUF_SIZE] = {0};
     uart_flush(UART_NUM);
     uart_write_bytes(UART_NUM, command, strlen(command));
@@ -70,7 +84,7 @@ bool at_send_command(const char *command, const char *expected_response, int tim
                 {
                     // ESP_LOGW(TAG, "out_response is NULL. Skipping response copy.");
                 }
-
+                xSemaphoreGive(xMutex);
                 return true;
             }
         }
@@ -85,6 +99,8 @@ bool at_send_command(const char *command, const char *expected_response, int tim
         strncpy(out_response, "ERROR!", UART_BUF_SIZE - 1);
         out_response[UART_BUF_SIZE - 1] = '\0'; // Ensure null-termination
     }
+
+    xSemaphoreGive(xMutex);
     return false;
 }
 

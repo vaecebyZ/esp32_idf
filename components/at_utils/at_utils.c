@@ -117,3 +117,8 @@ void generate_random_uuid(char *uuid, size_t size)
              rand4                              // 随机数
     );
 }
+
+void parse_json(const char *response)
+{
+
+}

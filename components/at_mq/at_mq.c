@@ -9,9 +9,7 @@
 #include "cJSON.h"
 #include "at_config.h"
 #include "at_utils.h"
-
 #define UART_BUF_SIZE 256
-
 #define QUEUE_SIZE 10;
 
 static char *TAG = "MQ";
@@ -108,7 +106,8 @@ bool at_mq_publish(mqMessage_t mqMessage)
   }
 
   sprintf(send_command, "%s", payload);
-  if (!at_send_command(send_command, "+MSUB:", 5000, NULL, true))
+  char response[UART_BUF_SIZE];
+  if (!at_send_command(send_command, "+MSUB:", 5000, response, true))
   {
     ESP_LOGE(TAG, "AT+MPUBX send failed");
     free(send_command);
@@ -116,6 +115,7 @@ bool at_mq_publish(mqMessage_t mqMessage)
   }
   free(send_command);
   free(payload);
+  parse_json(response);
   return true;
 }
 
@@ -197,6 +197,7 @@ void at_mq_heartbeat_task()
 {
   char topic[UART_BUF_SIZE];
   sprintf(topic, "/device/%s/ping/#", mqconfig.clientId);
+  // 心跳注册
   at_mq_subscribe(topic);
   while (1)
   {
@@ -209,9 +210,20 @@ void at_mq_heartbeat_task()
   }
 }
 
+void at_mq_topic_listener()
+{
+  while (1)
+  {
+    // 持续监听uart1中topic服务器返回的数据
+  }
+}
+
 bool at_mq_listening()
 {
-  xTaskCreatePinnedToCore(at_mq_heartbeat_task, "at_mq_heartbeat_task", 4096, NULL, 5, NULL, 1);
-  // 监听消息
+  // 启动心跳
+  xTaskCreatePinnedToCore(at_mq_heartbeat_task, "at_mq_heartbeat_task", 4096, NULL, 5, NULL, 0);
+  // 监听服务器消息
+  // xTaskCreatePinnedToCore(at_mq_topic_listener, "at_mq_topic_listener", 4096, NULL, 5, NULL, 1);
+
   return true;
 }

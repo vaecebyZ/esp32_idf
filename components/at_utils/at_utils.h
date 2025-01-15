@@ -6,4 +6,5 @@
 void generate_random_uuid(char *uuid, size_t size);
 bool initSysTimeByAT();
 uint64_t get_current_timestamp_ms();
+void parse_json(const char *response);
 #endif
