@@ -24,31 +24,29 @@ void getMQ()
   }
   mqConfig_t mqconfig = {
       .server = "",
-      .port = "1883",
+      .port = "",
       .clientId = iccid,
       .username = "",
       .password = "",
   };
-
   at_mq_connect(mqconfig);
   at_mq_subscribe("/platform/kbmqvsoj/regist/#");
-
   cJSON *payload = cJSON_CreateObject();
   cJSON_AddStringToObject(payload, "deviceId", iccid);
   cJSON_AddStringToObject(payload, "deviceName", "ESP32_AT");
   cJSON_AddStringToObject(payload, "deviceCate", getDeviceCateString(Elevator));
   cJSON_AddStringToObject(payload, "mqttUserName", mqconfig.username);
-  cJSON_AddStringToObject(payload, "projectInfoCode", "PJ202406050002");
-
+  cJSON_AddStringToObject(payload, "projectInfoCode", "");
+  char uuid[37];
+  generate_random_uuid(uuid, sizeof(uuid));
   mqMessage_t message = {
       .topic = "/platform/kbmqvsoj/regist/ESP32_AT",
       .event = RegistDevice,
       .data = payload,
       .time = get_current_timestamp_ms(),
       .ttl = 5000,
-      .id = iccid,
+      .id = uuid,
   };
-
   at_mq_publish(message);
   at_mq_free();
   while (1)
@@ -70,6 +68,9 @@ void app_main()
   // Perform AT check
   if (at_check_ping())
   {
+
+    initSysTimeByAT();
+    // Print current time
     // char *iccid = at_get_iccid();
     // ESP_LOGI(TAG, "ICCID: %s", iccid);
     // at_http_get("https://dev.usemock.com/6782c14e1f946a67671573e2/ping");

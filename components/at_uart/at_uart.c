@@ -13,7 +13,6 @@ static const char *TAG = "UART";
 #define TXD_PIN GPIO_NUM_17 // UART1 TX 引脚
 #define RXD_PIN GPIO_NUM_18 // UART1 RX 引脚
 
-
 static bool inited = false;
 
 // Initialize UART for AT communication
@@ -41,8 +40,6 @@ bool at_send_command(const char *command, const char *expected_response, int tim
 {
     char response[UART_BUF_SIZE] = {0};
     uart_flush(UART_NUM);
-    ESP_LOGI(TAG, "Sending [%s] expected response: %s", command, expected_response ? expected_response : "NULL");
-
     uart_write_bytes(UART_NUM, command, strlen(command));
     if (!noR)
     {
@@ -61,7 +58,7 @@ bool at_send_command(const char *command, const char *expected_response, int tim
             response[length] = '\0'; // Null-terminate response
             if (strstr(response, expected_response))
             {
-                ESP_LOGI(TAG, "Received expected response : %s", response);
+                // ESP_LOGI(TAG, "Received expected response : %s", response);
 
                 // If out_response is not NULL, copy the response to the output buffer
                 if (out_response != NULL)
@@ -71,7 +68,7 @@ bool at_send_command(const char *command, const char *expected_response, int tim
                 }
                 else
                 {
-                    ESP_LOGW(TAG, "out_response is NULL. Skipping response copy.");
+                    // ESP_LOGW(TAG, "out_response is NULL. Skipping response copy.");
                 }
 
                 return true;

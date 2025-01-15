@@ -78,7 +78,7 @@ bool at_http_get(const char *path)
   }
   if (strstr(response, "+HTTPACTION:") != NULL)
   {
-    ESP_LOGI(TAG, "HTTPACTION response: %s", response);
+    // ESP_LOGI(TAG, "HTTPACTION response: %s", response);
     char *action_start = strstr(response, "+HTTPACTION:");
     if (action_start)
     {
@@ -106,7 +106,7 @@ bool at_http_get(const char *path)
     close();
     return false;
   }
-  ESP_LOGI(TAG, "HTTP request succeeded, data length: %d", data_len);
+  // ESP_LOGI(TAG, "HTTP request succeeded, data length: %d", data_len);
   // 读取 HTTP 响应
   if (data_len > 0)
   {
