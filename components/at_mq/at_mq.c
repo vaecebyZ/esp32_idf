@@ -5,12 +5,18 @@
 #include <stdio.h>
 #include <string.h>
 #include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "cJSON.h"
 #include "at_config.h"
+#include "at_utils.h"
 
 #define UART_BUF_SIZE 256
 
+#define QUEUE_SIZE 10;
+
 static char *TAG = "MQ";
+
+static QueueHandle_t mq_topic_queue;
 
 static mqConfig_t mqconfig = {
     .username = NULL,
@@ -42,12 +48,12 @@ bool at_mq_free()
   return close();
 }
 
-bool at_mq_subscribe(const char *topic)
+void at_mq_subscribe(const char *topic)
 {
   if (topic == NULL)
   {
     ESP_LOGE(TAG, "topic is NULL");
-    return false;
+    return;
   }
   char command[UART_BUF_SIZE];
   // 订阅topic
@@ -55,9 +61,10 @@ bool at_mq_subscribe(const char *topic)
   if (!at_send_command(command, "SUBACK", 3000, NULL, false))
   {
     ESP_LOGE(TAG, "AT+MSUB failed");
-    return false;
+    return;
   }
-  return true;
+  ESP_LOGW(TAG, "Subscribed to %s", topic);
+  return;
 }
 
 bool at_mq_publish(mqMessage_t mqMessage)
@@ -162,5 +169,49 @@ bool at_mq_connect(const mqConfig_t config)
     return false;
   }
 
+  return true;
+}
+
+bool at_mq_heartbeat()
+{
+  char topic[UART_BUF_SIZE];
+  sprintf(topic, "/device/%s/ping", mqconfig.clientId);
+  ESP_LOGW(TAG, "Heartbeat topic: %s", topic);
+  cJSON *payload = cJSON_CreateObject();
+  cJSON_AddStringToObject(payload, "deviceId", mqconfig.clientId);
+  cJSON_AddStringToObject(payload, "projectInfoCode", "PJ202406050002");
+  char uuid[37];
+  generate_random_uuid(uuid, sizeof(uuid));
+  mqMessage_t heartbeat = {
+      .topic = topic,
+      .event = Ping,
+      .data = payload,
+      .time = get_current_timestamp_ms(),
+      .ttl = 5000,
+      .id = uuid,
+  };
+  return at_mq_publish(heartbeat);
+}
+
+void at_mq_heartbeat_task()
+{
+  char topic[UART_BUF_SIZE];
+  sprintf(topic, "/device/%s/ping/#", mqconfig.clientId);
+  at_mq_subscribe(topic);
+  while (1)
+  {
+    if (!at_mq_heartbeat())
+    {
+      ESP_LOGE(TAG, "Heartbeat failed");
+      vTaskDelete(NULL);
+    }
+    vTaskDelay(pdMS_TO_TICKS(30000));
+  }
+}
+
+bool at_mq_listening()
+{
+  xTaskCreatePinnedToCore(at_mq_heartbeat_task, "at_mq_heartbeat_task", 4096, NULL, 5, NULL, 1);
+  // 监听消息
   return true;
 }

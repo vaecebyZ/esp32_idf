@@ -30,17 +30,20 @@ void getMQ()
       .password = "",
   };
   at_mq_connect(mqconfig);
-  at_mq_subscribe("/platform/kbmqvsoj/regist/#");
+  char topic[UART_BUF_SIZE];
+  sprintf(topic, "/platform/%s/regist/#", mqconfig.username);
+  at_mq_subscribe(topic);
   cJSON *payload = cJSON_CreateObject();
   cJSON_AddStringToObject(payload, "deviceId", iccid);
   cJSON_AddStringToObject(payload, "deviceName", "ESP32_AT");
   cJSON_AddStringToObject(payload, "deviceCate", getDeviceCateString(Elevator));
   cJSON_AddStringToObject(payload, "mqttUserName", mqconfig.username);
-  cJSON_AddStringToObject(payload, "projectInfoCode", "");
+  cJSON_AddStringToObject(payload, "projectInfoCode", "PJ202406050002");
   char uuid[37];
   generate_random_uuid(uuid, sizeof(uuid));
+  sprintf(topic, "/platform/%s/regist", mqconfig.username);
   mqMessage_t message = {
-      .topic = "/platform/kbmqvsoj/regist/ESP32_AT",
+      .topic = topic,
       .event = RegistDevice,
       .data = payload,
       .time = get_current_timestamp_ms(),
@@ -48,11 +51,15 @@ void getMQ()
       .id = uuid,
   };
   at_mq_publish(message);
-  at_mq_free();
+  at_mq_listening();
   while (1)
   {
-    vTaskDelay(pdMS_TO_TICKS(100)); // 避免任务占用过多 CPU
+    ESP_LOGI("STACK", "Remaining stack size: %d", uxTaskGetStackHighWaterMark(NULL));
+    vTaskDelay(pdMS_TO_TICKS(10000));
   }
+
+  // at_mq_free();
+  // vTaskDelete(NULL);
 }
 
 void app_main()
@@ -76,10 +83,5 @@ void app_main()
     // at_http_get("https://dev.usemock.com/6782c14e1f946a67671573e2/ping");
     // at_http_post("https://dev.usemock.com/6782c14e1f946a67671573e2/pong");
     xTaskCreatePinnedToCore(getMQ, "getMQ", 8192, NULL, 5, NULL, 1);
-  }
-  while (1)
-  {
-    ESP_LOGI("STACK", "Remaining stack size: %d", uxTaskGetStackHighWaterMark(NULL));
-    vTaskDelay(pdMS_TO_TICKS(1000));
   }
 }
