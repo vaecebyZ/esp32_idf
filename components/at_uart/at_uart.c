@@ -45,7 +45,7 @@ void at_uart_init()
 }
 
 // Send an AT command and wait for a response
-bool at_send_command(const char *command, const char *expected_response, int timeout_ms, char *out_response, bool noR)
+bool at_send_command(const char *command, const char *expected_response, const int timeout_ms, char *out_response, const bool noR)
 {
     while (xSemaphoreTake(xMutex, portMAX_DELAY) == pdFALSE)
     {
