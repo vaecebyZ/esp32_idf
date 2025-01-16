@@ -50,7 +50,7 @@ void getMQ()
       .ttl = 5000,
       .id = uuid,
   };
-  at_mq_publish(message);
+  at_mq_publish(message,NULL,NULL);
   at_mq_listening();
   while (1)
   {

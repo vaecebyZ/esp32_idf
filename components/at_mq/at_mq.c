@@ -65,7 +65,7 @@ void at_mq_subscribe(const char *topic)
   return;
 }
 
-bool at_mq_publish(mqMessage_t mqMessage)
+bool at_mq_publish(const mqMessage_t mqMessage, char *expected_response, char *responseJSON)
 {
   if (!validateMqConfig(&mqconfig))
   {
@@ -77,6 +77,10 @@ bool at_mq_publish(mqMessage_t mqMessage)
     ESP_LOGE(TAG, "Invalid mqMessage");
     return false;
   }
+  if (expected_response == NULL)
+  {
+    expected_response = "+MSUB:";
+  }
   char command[UART_BUF_SIZE];
   // 发送消息
   cJSON *root = cJSON_CreateObject();
@@ -86,6 +90,7 @@ bool at_mq_publish(mqMessage_t mqMessage)
   cJSON_AddNumberToObject(root, "time", mqMessage.time);
   cJSON_AddNumberToObject(root, "ttl", mqMessage.ttl);
   char *payload = cJSON_PrintUnformatted(root);
+  cJSON_Delete(root);
   char *topcpub = mqMessage.topic;
   // 发送长数据
   sprintf(command, "AT+MPUBEX=\"%s\",0,0,%d", topcpub, strlen(payload) + 1);
@@ -107,7 +112,7 @@ bool at_mq_publish(mqMessage_t mqMessage)
 
   sprintf(send_command, "%s", payload);
   char response[UART_BUF_SIZE];
-  if (!at_send_command(send_command, "+MSUB:", 5000, response, true))
+  if (!at_send_command(send_command, expected_response, 5000, response, true))
   {
     ESP_LOGE(TAG, "AT+MPUBX send failed");
     free(send_command);
@@ -115,7 +120,10 @@ bool at_mq_publish(mqMessage_t mqMessage)
   }
   free(send_command);
   free(payload);
-  parse_json(response);
+  if (responseJSON != NULL)
+  {
+    parse_json(response, responseJSON);
+  }
   return true;
 }
 
@@ -172,6 +180,53 @@ bool at_mq_connect(const mqConfig_t config)
   return true;
 }
 
+bool getHeartbeatResponse(const char *res)
+{
+  //  {
+  //     "id": "52D7BD9D-42A1-4DB6-BFE4-59FAB83995BF",
+  //     "data": {
+  //         "time": 1737008394298,
+  //         "Status": 1,
+  //         "Msg": "Success",
+  //         "message": ""
+  //     },
+  //     "time": 1737008394298,
+  //     "ttl": 5000,
+  //     "event": "ping"
+  // }
+  cJSON *root = cJSON_Parse(res);
+  if (root == NULL)
+  {
+    ESP_LOGE(TAG, "Failed to parse JSON");
+    return false;
+  }
+
+  cJSON *data = cJSON_GetObjectItem(root, "data");
+
+  if (data == NULL)
+  {
+    ESP_LOGE(TAG, "Failed to get data");
+    cJSON_Delete(root);
+    return false;
+  }
+  cJSON *code = cJSON_GetObjectItem(data, "Status");
+  if (code == NULL)
+  {
+    ESP_LOGE(TAG, "Failed to get code");
+    cJSON_Delete(root);
+    return false;
+  }
+  if (code->valueint != 1)
+  {
+    ESP_LOGE(TAG, "Failed to get code");
+    cJSON_Delete(root);
+    return false;
+  }
+  ESP_LOGI(TAG, "Heartbeat success get code %d", code->valueint);
+  cJSON_Delete(root);
+  return true;
+}
+
 bool at_mq_heartbeat()
 {
   char topic[UART_BUF_SIZE];
@@ -190,14 +245,20 @@ bool at_mq_heartbeat()
       .ttl = 5000,
       .id = uuid,
   };
-  return at_mq_publish(heartbeat);
+  char res[UART_BUF_SIZE];
+  if (at_mq_publish(heartbeat, "/ping/reply", res))
+  {
+    ESP_LOGW(TAG, "Heartbeat response %s", res);
+
+    return getHeartbeatResponse(res);
+  }
+  return false;
 }
 
 void at_mq_heartbeat_task()
 {
   char topic[UART_BUF_SIZE];
   sprintf(topic, "/device/%s/ping/#", mqconfig.clientId);
-  // 心跳注册
   at_mq_subscribe(topic);
   while (1)
   {
@@ -210,20 +271,9 @@ void at_mq_heartbeat_task()
   }
 }
 
-void at_mq_topic_listener()
-{
-  while (1)
-  {
-    // 持续监听uart1中topic服务器返回的数据
-  }
-}
-
 bool at_mq_listening()
 {
-  // 启动心跳
-  xTaskCreatePinnedToCore(at_mq_heartbeat_task, "at_mq_heartbeat_task", 4096, NULL, 5, NULL, 0);
-  // 监听服务器消息
-  // xTaskCreatePinnedToCore(at_mq_topic_listener, "at_mq_topic_listener", 4096, NULL, 5, NULL, 1);
-
+  xTaskCreatePinnedToCore(at_mq_heartbeat_task, "at_mq_heartbeat_task", 4096, NULL, 5, NULL, 1);
+  // 监听消息
   return true;
 }

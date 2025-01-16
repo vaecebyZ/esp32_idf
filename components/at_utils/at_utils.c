@@ -118,7 +118,19 @@ void generate_random_uuid(char *uuid, size_t size)
     );
 }
 
-void parse_json(const char *response)
+void parse_json(const char *input, char *output)
 {
+    const char *start = strchr(input, '{'); // 找到第一个 '{'
+    const char *end = strrchr(input, '}');  // 找到最后一个 '}'
 
+    if (start && end && end > start)
+    {
+        size_t length = end - start + 1; // 计算 JSON 的长度
+        strncpy(output, start, length);  // 复制 JSON 数据
+        output[length] = '\0';           // 添加字符串结束符
+    }
+    else
+    {
+        strcpy(output, "{}"); // 如果没找到，返回错误信息
+    }
 }
