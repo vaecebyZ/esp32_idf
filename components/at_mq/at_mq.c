@@ -9,12 +9,8 @@
 #include "cJSON.h"
 #include "at_config.h"
 #include "at_utils.h"
-#define UART_BUF_SIZE 256
-#define QUEUE_SIZE 10;
 
 static char *TAG = "MQ";
-
-static QueueHandle_t mq_topic_queue;
 
 static mqConfig_t mqconfig = {
     .username = NULL,
@@ -273,7 +269,9 @@ void at_mq_heartbeat_task()
 
 bool at_mq_listening()
 {
-  xTaskCreatePinnedToCore(at_mq_heartbeat_task, "at_mq_heartbeat_task", 4096, NULL, 5, NULL, 1);
+  xTaskCreatePinnedToCore(at_mq_heartbeat_task, "at_mq_heartbeat_task", 4096, NULL, 5, NULL, 0);
+  xTaskCreatePinnedToCore(at_uart_listening, "at_uart_listening", 4096, NULL, 5, NULL, 1);
+  xTaskCreatePinnedToCore(message_handler_task, "message_handler_task", 4096, NULL, 5, NULL, 1);
   // 监听消息
   return true;
 }

@@ -2,24 +2,36 @@
 #include <string.h>
 #include "driver/uart.h"
 #include "esp_log.h"
-#include <stddef.h>
 #include "esp_err.h"
 #include "driver/gpio.h"
 #include "at_config.h"
+#include "at_utils.h"
 #include <freertos/semphr.h>
-// 定义互斥锁句柄
-SemaphoreHandle_t xMutex;
-static const char *TAG = "UART";
-
 #define UART_NUM UART_NUM_1
 #define TXD_PIN GPIO_NUM_17 // UART1 TX 引脚
 #define RXD_PIN GPIO_NUM_18 // UART1 RX 引脚
+#define UART_BUF_LISTEN_SIZE 512
 
+static const char *TAG = "UART";
+static SemaphoreHandle_t xMutex = NULL;
+static QueueHandle_t messageQueue = NULL;
 static bool inited = false;
 
-// Initialize UART for AT communication
+// 封装互斥锁获取逻辑，增加超时保护
+static bool take_mutex_with_timeout(SemaphoreHandle_t mutex, int timeout_ms)
+{
+    return xSemaphoreTake(mutex, pdMS_TO_TICKS(timeout_ms)) == pdTRUE;
+}
+
+// 初始化 UART
 void at_uart_init()
 {
+    if (inited)
+    {
+        ESP_LOGW(TAG, "UART already initialized");
+        return;
+    }
+
     uart_config_t uart_config = {
         .baud_rate = 115200,
         .data_bits = UART_DATA_8_BITS,
@@ -28,30 +40,51 @@ void at_uart_init()
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
         .source_clk = UART_SCLK_APB,
     };
-    // Configure UART parameters
-    ESP_ERROR_CHECK(uart_driver_install(UART_NUM, UART_BUF_SIZE, 0, 0, NULL, 0));
-    ESP_ERROR_CHECK(uart_param_config(UART_NUM, &uart_config));
-    // Set UART pins(TX, RX, RTS, CTS)
-    ESP_ERROR_CHECK(uart_set_pin(UART_NUM, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
-    ESP_LOGI(TAG, "inited");
-    // 创建互斥锁
+
+    if (uart_driver_install(UART_NUM, UART_BUF_SIZE, 0, 0, NULL, 0) != ESP_OK ||
+        uart_param_config(UART_NUM, &uart_config) != ESP_OK ||
+        uart_set_pin(UART_NUM, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE) != ESP_OK)
+    {
+        ESP_LOGE(TAG, "UART initialization failed");
+        return;
+    }
+
     xMutex = xSemaphoreCreateMutex();
     if (xMutex == NULL)
     {
-        printf("Failed to create mutex\n");
+        ESP_LOGE(TAG, "Failed to create mutex");
+        uart_driver_delete(UART_NUM);
         return;
     }
+
+    messageQueue = xQueueCreate(10, UART_BUF_LISTEN_SIZE);
+    if (messageQueue == NULL)
+    {
+        ESP_LOGE(TAG, "Failed to create message queue");
+        vSemaphoreDelete(xMutex);
+        uart_driver_delete(UART_NUM);
+        return;
+    }
+
     inited = true;
+    ESP_LOGI(TAG, "UART initialized successfully");
 }
 
-// Send an AT command and wait for a response
-bool at_send_command(const char *command, const char *expected_response, const int timeout_ms, char *out_response, const bool noR)
+// 发送 AT 指令并等待响应
+bool at_send_command(const char *command, const char *expected_response, int timeout_ms, char *out_response, bool noR)
 {
-    while (xSemaphoreTake(xMutex, portMAX_DELAY) == pdFALSE)
+    if (!inited)
     {
-        ESP_LOGW(TAG, "Waiting for mutex");
-        vTaskDelay(pdMS_TO_TICKS(100));
+        ESP_LOGE(TAG, "UART not initialized");
+        return false;
     }
+
+    if (!take_mutex_with_timeout(xMutex, 500))
+    {
+        ESP_LOGE(TAG, "Failed to take mutex");
+        return false;
+    }
+
     char response[UART_BUF_SIZE] = {0};
     uart_flush(UART_NUM);
     uart_write_bytes(UART_NUM, command, strlen(command));
@@ -60,29 +93,19 @@ bool at_send_command(const char *command, const char *expected_response, const i
         uart_write_bytes(UART_NUM, "\r", 1);
     }
 
-    // Wait for response
-    int length = 0;
     int elapsed_time = 0;
-
     while (elapsed_time < timeout_ms)
     {
-        length = uart_read_bytes(UART_NUM, (uint8_t *)response, sizeof(response) - 1, pdMS_TO_TICKS(100));
+        int length = uart_read_bytes(UART_NUM, (uint8_t *)response, sizeof(response) - 1, pdMS_TO_TICKS(100));
         if (length > 0)
         {
-            response[length] = '\0'; // Null-terminate response
+            response[length] = '\0';
             if (strstr(response, expected_response))
             {
-                // ESP_LOGI(TAG, "Received expected response : %s", response);
-
-                // If out_response is not NULL, copy the response to the output buffer
-                if (out_response != NULL)
+                if (out_response)
                 {
                     strncpy(out_response, response, UART_BUF_SIZE - 1);
-                    out_response[UART_BUF_SIZE - 1] = '\0'; // Ensure null-termination
-                }
-                else
-                {
-                    // ESP_LOGW(TAG, "out_response is NULL. Skipping response copy.");
+                    out_response[UART_BUF_SIZE - 1] = '\0';
                 }
                 xSemaphoreGive(xMutex);
                 return true;
@@ -92,31 +115,80 @@ bool at_send_command(const char *command, const char *expected_response, const i
     }
 
     ESP_LOGE(TAG, "Timeout waiting for response. Last response: %s", response);
-
-    // If out_response is not NULL, copy the last received response
-    if (out_response != NULL)
+    if (out_response)
     {
         strncpy(out_response, "ERROR!", UART_BUF_SIZE - 1);
-        out_response[UART_BUF_SIZE - 1] = '\0'; // Ensure null-termination
+        out_response[UART_BUF_SIZE - 1] = '\0';
     }
 
     xSemaphoreGive(xMutex);
     return false;
 }
 
-// Deinitialize UART
+// UART 监听任务
+void at_uart_listening()
+{
+    if (!inited || xMutex == NULL || messageQueue == NULL)
+    {
+        ESP_LOGE(TAG, "UART not properly initialized");
+        return;
+    }
+
+    char response[UART_BUF_LISTEN_SIZE] = {0};
+
+    while (1)
+    {
+        if (take_mutex_with_timeout(xMutex, 500))
+        {
+            int length = uart_read_bytes(UART_NUM, (uint8_t *)response, sizeof(response) - 1, pdMS_TO_TICKS(100));
+            if (length > 0)
+            {
+                response[length] = '\0';
+                if (strstr(response, "+MSUB:"))
+                {
+                    if (xQueueSend(messageQueue, response, pdMS_TO_TICKS(100)) != pdPASS)
+                    {
+                        ESP_LOGE(TAG, "Failed to send message to queue");
+                    }
+                }
+            }
+            xSemaphoreGive(xMutex);
+        }
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+// 消息处理任务
+void message_handler_task()
+{
+    char receivedMessage[UART_BUF_LISTEN_SIZE] = {0};
+
+    while (1)
+    {
+        if (xQueueReceive(messageQueue, receivedMessage, portMAX_DELAY) == pdTRUE)
+        {
+            char res[UART_BUF_SIZE];
+            parse_json(receivedMessage, res);
+            ESP_LOGI(TAG, "Processing message: %s", res);
+        }
+    }
+}
+
+// 反初始化 UART
 void at_uart_deinit()
 {
-    if (inited)
-    {
-        uart_driver_delete(UART_NUM); // Uninstall UART driver
-        ESP_LOGI(TAG, "UART deinitialized");
-        inited = false;
-    }
-    else
+    if (!inited)
     {
         ESP_LOGW(TAG, "UART not initialized, nothing to deinitialize");
+        return;
     }
+
+    vSemaphoreDelete(xMutex);
+    vQueueDelete(messageQueue);
+    uart_driver_delete(UART_NUM);
+    inited = false;
+
+    ESP_LOGI(TAG, "UART deinitialized successfully");
 }
 
 bool is_uart_inited()
